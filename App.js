@@ -1,5 +1,11 @@
 import React, { Component } from 'react';
-import { StyleSheet, Text, View, FlatList } from 'react-native';
+import { StyleSheet, Text, View, FlatList, Button } from 'react-native';
+
+import {decode, encode} from 'base-64'
+
+if (!global.btoa) {  global.btoa = encode }
+
+if (!global.atob) { global.atob = decode }
 
 const firebase = require('firebase');
 require('firebase/firestore');
@@ -26,11 +32,21 @@ export default class App extends Component {
   }
 
   componentDidMount() {
-    this.unsubscribe = this.referenceShoppingLists.onSnapshot(this.onCollectionUpdate)
+    this.authUnsubscribe = firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) {
+        await firebase.auth().signInAnonymously();
+      }
+      this.setState({
+        uid: user.uid,
+        loggedInText: 'Hello there',
+      });
+      this.referenceShoppingListUser = firebase.firestore().collection('shoppinglists').where("uid", "==", this.state.uid);
+    });
+    this.unsubscribeListUser = this.referenceShoppingListUser.onSnapshot(this.onCollectionUpdate);
   }
 
   componentWillUnmount() {
-    this.unsubscribe();
+    this.authUnsubscribe();
   }
 
   onCollectionUpdate = (querySnapshot) => {
@@ -47,15 +63,25 @@ export default class App extends Component {
     });
   };
 
+  addList() {
+    this.referenceShoppingLists.add({
+      name: 'TestList',
+      items: ['eggs', 'pasta', 'veggies'],
+      uid: this.state.uid,
+    });
+  }
+
   render() {
     return (
       <View style={styles.container}>
+        <Text>{this.state.loggedInText}</Text>
         <Text style={styles.text}>All Shopping Lists</Text>
         <FlatList
           data={this.state.lists}
           renderItem={({ item }) => 
           <Text style={styles.item}>{item.name}: {item.items}</Text>}
         />
+        <Button title="Add the list" onPress={() => {this.addList();}}/>
       </View>
     );
   }
